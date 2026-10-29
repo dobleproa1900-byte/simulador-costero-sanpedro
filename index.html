@@ -608,12 +608,12 @@
     <!-- JAVASCRIPT LOGIC & LEAFLET SIMULATION ENGINE -->
     <script>
         /* ==========================================================================
-           1. DATA STRUCTURES & DEFINITIONS (SAN PEDRO, BUENOS AIRES)
+           1. DATA STRUCTURES & DEFINITIONS (SAN PEDRO, BUENOS AIRES REAL GPS)
            ========================================================================== */
         
-        // San Pedro Riverfront Center Coordinates
-        const SAN_PEDRO_CENTER = [-33.673, -59.658];
-        const DEFAULT_ZOOM = 14;
+        // Exact San Pedro Riverfront & Port Center Coordinates
+        const SAN_PEDRO_CENTER = [-33.6765, -59.6560];
+        const DEFAULT_ZOOM = 15;
 
         // Active State Variable
         let currentWaterLevel = 1.50;
@@ -621,7 +621,7 @@
         let simTimer = null;
         let deferredPrompt = null;
 
-        // 9 Coastal Zones with Prompt Base Elevations & Coordinates
+        // 9 Coastal Zones aligned with real San Pedro Shoreline
         const ZONES_DATA = [
             {
                 id: 'zone_insular',
@@ -629,11 +629,11 @@
                 baseElevation: 1.50,
                 color: '#38bdf8',
                 coords: [
-                    [-33.655, -59.650],
-                    [-33.648, -59.632],
-                    [-33.662, -59.625],
-                    [-33.675, -59.642],
-                    [-33.666, -59.652]
+                    [-33.6650, -59.6500],
+                    [-33.6550, -59.6350],
+                    [-33.6680, -59.6250],
+                    [-33.6800, -59.6400],
+                    [-33.6720, -59.6500]
                 ]
             },
             {
@@ -642,10 +642,10 @@
                 baseElevation: 2.00,
                 color: '#22d3ee',
                 coords: [
-                    [-33.681, -59.667],
-                    [-33.678, -59.663],
-                    [-33.682, -59.660],
-                    [-33.685, -59.665]
+                    [-33.6830, -59.6625],
+                    [-33.6800, -59.6600],
+                    [-33.6820, -59.6580],
+                    [-33.6845, -59.6605]
                 ]
             },
             {
@@ -654,10 +654,10 @@
                 baseElevation: 2.20,
                 color: '#2dd4bf',
                 coords: [
-                    [-33.677, -59.664],
-                    [-33.672, -59.661],
-                    [-33.673, -59.658],
-                    [-33.678, -59.661]
+                    [-33.6805, -59.6595],
+                    [-33.6775, -59.6565],
+                    [-33.6785, -59.6550],
+                    [-33.6815, -59.6580]
                 ]
             },
             {
@@ -666,10 +666,10 @@
                 baseElevation: 2.30,
                 color: '#a855f7',
                 coords: [
-                    [-33.668, -59.658],
-                    [-33.664, -59.656],
-                    [-33.666, -59.653],
-                    [-33.670, -59.656]
+                    [-33.6730, -59.6535],
+                    [-33.6705, -59.6515],
+                    [-33.6720, -59.6500],
+                    [-33.6740, -59.6520]
                 ]
             },
             {
@@ -678,10 +678,10 @@
                 baseElevation: 2.40,
                 color: '#3b82f6',
                 coords: [
-                    [-33.671, -59.659],
-                    [-33.668, -59.658],
-                    [-33.669, -59.655],
-                    [-33.672, -59.657]
+                    [-33.6770, -59.6550],
+                    [-33.6750, -59.6530],
+                    [-33.6760, -59.6515],
+                    [-33.6780, -59.6535]
                 ]
             },
             {
@@ -690,10 +690,10 @@
                 baseElevation: 3.00,
                 color: '#6366f1',
                 coords: [
-                    [-33.672, -59.660],
-                    [-33.669, -59.658],
-                    [-33.670, -59.656],
-                    [-33.673, -59.658]
+                    [-33.6780, -59.6560],
+                    [-33.6760, -59.6540],
+                    [-33.6770, -59.6525],
+                    [-33.6790, -59.6545]
                 ]
             },
             {
@@ -702,10 +702,10 @@
                 baseElevation: 3.20,
                 color: '#f59e0b',
                 coords: [
-                    [-33.674, -59.656],
-                    [-33.671, -59.653],
-                    [-33.673, -59.649],
-                    [-33.676, -59.652]
+                    [-33.6740, -59.6500],
+                    [-33.6710, -59.6470],
+                    [-33.6725, -59.6450],
+                    [-33.6755, -59.6480]
                 ]
             },
             {
@@ -714,10 +714,10 @@
                 baseElevation: 4.20,
                 color: '#ec4899',
                 coords: [
-                    [-33.678, -59.665],
-                    [-33.674, -59.662],
-                    [-33.676, -59.659],
-                    [-33.680, -59.662]
+                    [-33.6810, -59.6610],
+                    [-33.6780, -59.6580],
+                    [-33.6795, -59.6565],
+                    [-33.6820, -59.6590]
                 ]
             },
             {
@@ -726,22 +726,22 @@
                 baseElevation: 4.80,
                 color: '#10b981',
                 coords: [
-                    [-33.672, -59.661],
-                    [-33.670, -59.660],
-                    [-33.671, -59.658],
-                    [-33.673, -59.659]
+                    [-33.6735, -59.6595],
+                    [-33.6710, -59.6575],
+                    [-33.6720, -59.6560],
+                    [-33.6745, -59.6580]
                 ]
             }
         ];
 
-        // 10 Tactical POIs (Marcadores)
+        // 10 Accurate Tactical POIs with Exact San Pedro GPS Coordinates
         const POIS_DATA = [
             {
                 id: 'poi_pna',
                 name: 'Prefectura San Pedro (Destacamento Principal)',
                 category: 'Oficial / Control',
                 baseElevation: 4.80,
-                coords: [-33.6712, -59.6602],
+                coords: [-33.6722, -59.6582],
                 icon: 'fa-shield-halved'
             },
             {
@@ -749,15 +749,15 @@
                 name: 'Puerto San Pedro - Consorcio de Gestión',
                 category: 'Comercial / Portuario',
                 baseElevation: 3.20,
-                coords: [-33.6738, -59.6535],
+                coords: [-33.6728, -59.6485],
                 icon: 'fa-ship'
             },
             {
                 id: 'poi_nautico',
-                name: 'Club Náutico San Pedro (Dársena Central)',
+                name: 'Club Náutico San Pedro (Amarraderos y Rampas)',
                 category: 'Recreativo / Deportivo',
                 baseElevation: 2.40,
-                coords: [-33.6705, -59.6572],
+                coords: [-33.6762, -59.6538],
                 icon: 'fa-anchor'
             },
             {
@@ -765,7 +765,7 @@
                 name: 'Club de Pescadores de San Pedro',
                 category: 'Recreativo / Camping',
                 baseElevation: 2.30,
-                coords: [-33.6668, -59.6558],
+                coords: [-33.6718, -59.6525],
                 icon: 'fa-fish'
             },
             {
@@ -773,7 +773,7 @@
                 name: 'Paseo Público Municipal / Costanera Baja',
                 category: 'Público / Peatonal',
                 baseElevation: 2.20,
-                coords: [-33.6751, -59.6612],
+                coords: [-33.6792, -59.6580],
                 icon: 'fa-tree'
             },
             {
@@ -781,7 +781,7 @@
                 name: 'Guardería Náutica / Bajada de Chaves',
                 category: 'Embarcaciones Menores',
                 baseElevation: 2.00,
-                coords: [-33.6802, -59.6641],
+                coords: [-33.6815, -59.6612],
                 icon: 'fa-warehouse'
             },
             {
@@ -789,7 +789,7 @@
                 name: 'Estación de Bombeo y Achique Costero',
                 category: 'Infraestructura Crítica',
                 baseElevation: 2.10,
-                coords: [-33.6768, -59.6625],
+                coords: [-33.6800, -59.6600],
                 icon: 'fa-faucet-drip'
             },
             {
@@ -797,7 +797,7 @@
                 name: 'Puesto Sanitario y Evacuación (Defensa Civil)',
                 category: 'Emergencia / Salud',
                 baseElevation: 4.50,
-                coords: [-33.6725, -59.6631],
+                coords: [-33.6750, -59.6620],
                 icon: 'fa-kit-medical'
             },
             {
@@ -805,7 +805,7 @@
                 name: 'Comunidad Islera Delta - Riacho San Pedro',
                 category: 'Población Insular',
                 baseElevation: 1.50,
-                coords: [-33.6620, -59.6420],
+                coords: [-33.6640, -59.6420],
                 icon: 'fa-house-water'
             },
             {
@@ -813,7 +813,7 @@
                 name: 'Toma de Agua Potable Municipal',
                 category: 'Servicio Público',
                 baseElevation: 2.80,
-                coords: [-33.6745, -59.6580],
+                coords: [-33.6778, -59.6552],
                 icon: 'fa-droplet'
             }
         ];
