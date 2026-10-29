@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="es" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulador Hidrológico Costero - San Pedro, BA</title>
+    
+    <!-- PWA Primary Meta Tags -->
+    <meta name="theme-color" content="#0284c7">
+    <meta name="description" content="Herramienta táctica y preventiva de simulación de cota e inundación costera para el Puerto y Costanera de San Pedro, Buenos Aires. Prefectura Naval y Defensa Civil.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="San Pedro Río">
+
+    <!-- Embedded Web App Manifest -->
+    <link rel="manifest" href="data:application/manifest+json,{
+        &quot;name&quot;: &quot;Simulador Hidrológico Costero San Pedro&quot;,
+        &quot;short_name&quot;: &quot;SanPedro Río&quot;,
+        &quot;start_url&quot;: &quot;.&quot;,
+        &quot;display&quot;: &quot;standalone&quot;,
+        &quot;background_color&quot;: &quot;#0f172a&quot;,
+        &quot;theme_color&quot;: &quot;#0284c7&quot;,
+        &quot;icons&quot;: [{
+            &quot;src&quot;: &quot;https://cdn-icons-png.flaticon.com/512/854/854878.png&quot;,
+            &quot;sizes&quot;: &quot;512x512&quot;,
+            &quot;type&quot;: &quot;image/png&quot;
+        }]
+    }">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        tactical: {
+                            900: '#090d16',
+                            800: '#111827',
+                            700: '#1f2937',
+                            border: '#374151',
+                            accent: '#0284c7',
+                            warning: '#eab308',
+                            danger: '#ef4444',
+                            success: '#10b981'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom CSS for Map & Tactical Animations -->
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #0284c7; }
+
+        /* Leaflet custom map dark aesthetic */
+        .leaflet-container {
+            background-color: #0b1329 !important;
+            font-family: inherit;
+        }
+
+        /* Tactical Pulse Markers */
+        .marker-pulse-green {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse-green 2s infinite;
+        }
+        .marker-pulse-yellow {
+            box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.8);
+            animation: pulse-yellow 1.5s infinite;
+        }
+        .marker-pulse-red {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9);
+            animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        @keyframes pulse-yellow {
+            0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.8); }
+            70% { box-shadow: 0 0 0 12px rgba(234, 179, 8, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9); }
+            70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Custom Range Slider styling */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            border: 3px solid #0f172a;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+            transition: all 0.15s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #38bdf8;
+        }
+
+        /* Water Pattern animation overlay */
+        .water-flooded-polygon {
+            transition: all 0.4s ease-in-out;
+        }
+
+        /* Print styling for Tactical Guard Report */
+        @media print {
+            body * { visibility: hidden; }
+            #modalReport, #modalReport * { visibility: visible; }
+            #modalReport { position: absolute; left: 0; top: 0; width: 100%; color: #000; background: #fff !important; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full flex flex-col font-sans overflow-hidden select-none">
+
+    <!-- HEADER / NAVIGATION TÁCTICA -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 z-30 shadow-lg">
+        <!-- Logo & Title -->
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-sky-950 border border-sky-500/40 flex items-center justify-center text-sky-400 shadow-inner">
+                <i class="fa-solid fa-shield-halved text-xl"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-bold text-base sm:text-lg text-slate-100 tracking-wide uppercase leading-tight">
+                        SIMULADOR HIDROLÓGICO COSTERO
+                    </h1>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 hidden sm:inline-block">
+                        SAN PEDRO (PBA)
+                    </span>
+                </div>
+                <p class="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                    <i class="fa-solid fa-anchor text-sky-500 text-[10px]"></i>
+                    <span>Prefectura Naval &amp; Defensa Civil • Escala Puerto San Pedro (Cero: 0.00m)</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Realtime Alert Badge & Quick Actions -->
+        <div class="flex items-center gap-2 sm:gap-3 ml-auto">
+            <!-- Badge Dinámico -->
+            <div id="statusBadge" class="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border shadow-sm transition-all bg-emerald-950/80 text-emerald-400 border-emerald-800/80">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="statusBadgeText" class="uppercase tracking-wider">NORMAL / ESTIAJE</span>
+            </div>
+
+            <!-- Action Buttons -->
+            <button onclick="openReportModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-2 transition active:scale-95 shadow">
+                <i class="fa-solid fa-file-contract text-sky-400"></i>
+                <span class="hidden md:inline">Parte de Guardia</span>
+            </button>
+
+            <button onclick="openInfoModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs flex items-center justify-center transition active:scale-95" title="Información y Guía de Cotas">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+
+            <!-- PWA Install Badge -->
+            <button id="pwaInstallBtn" onclick="installPWA()" class="hidden px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5 transition animate-bounce shadow">
+                <i class="fa-solid fa-download"></i>
+                <span class="hidden lg:inline">Instalar App</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN APP CONTAINER -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- MAP CONTAINER (LEFT / TOP) -->
+        <div class="flex-1 h-[50vh] md:h-full relative bg-slate-950 flex flex-col">
+            
+            <!-- Map Floating Controls Overlay -->
+            <div class="absolute top-3 left-3 right-3 z-[1000] pointer-events-none flex flex-wrap items-center justify-between gap-2">
+                <!-- Floating Level Display for Mobile/Map View -->
+                <div class="pointer-events-auto bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-700/80 shadow-xl flex items-center gap-3">
+                    <span class="text-xs text-slate-400 font-mono">COTA ACTIVA:</span>
+                    <span id="mapLevelDisplay" class="font-mono font-extrabold text-xl text-sky-400">1.50 m</span>
+                </div>
+
+                <!-- Map Tile Layers Switcher -->
+                <div class="pointer-events-auto bg-slate-900/90 backdrop-blur-md p-1 rounded-lg border border-slate-700/80 shadow-xl flex items-center gap-1">
+                    <button onclick="switchBaseLayer('osm')" id="btnOsm" class="px-2.5 py-1 rounded text-xs font-semibold bg-sky-600 text-white transition">Mapa</button>
+                    <button onclick="switchBaseLayer('sat')" id="btnSat" class="px-2.5 py-1 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 transition">Satélite</button>
+                    <button onclick="switchBaseLayer('dark')" id="btnDark" class="px-2.5 py-1 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 transition">Oscuro</button>
+                </div>
+            </div>
+
+            <!-- Leaflet Map Container -->
+            <div id="map" class="w-full flex-1 z-10"></div>
+
+            <!-- Map Legend (Bottom Right) -->
+            <div class="absolute bottom-4 right-4 z-[1000] bg-slate-900/90 backdrop-blur-md p-2.5 rounded-lg border border-slate-800 shadow-2xl text-[11px] space-y-1.5 hidden sm:block max-w-[200px]">
+                <div class="font-bold text-slate-300 border-b border-slate-800 pb-1 mb-1">Referencia Táctica</div>
+                <div class="flex items-center gap-2 text-slate-300">
+                    <span class="w-3 h-3 rounded bg-emerald-500/80 border border-emerald-400 inline-block"></span>
+                    <span>Terreno Seco / Operativo</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-300">
+                    <span class="w-3 h-3 rounded bg-amber-500/80 border border-amber-400 inline-block"></span>
+                    <span>Anegamiento Inminente</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-300">
+                    <span class="w-3 h-3 rounded bg-rose-600/80 border border-rose-400 inline-block"></span>
+                    <span>Inundación Severa</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-300">
+                    <span class="w-3 h-3 rounded bg-sky-500/50 border border-sky-400 inline-block"></span>
+                    <span>Delta e Islas del Paraná</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDEBAR / CONTROLS & TACTICAL DASHBOARD -->
+        <aside class="w-full md:w-[450px] lg:w-[480px] bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col h-[50vh] md:h-full z-20 shadow-2xl overflow-hidden">
+            
+            <!-- Navigation Tabs for Mobile / Compact View -->
+            <div class="flex items-center border-b border-slate-800 bg-slate-950/80 px-2 py-1.5 shrink-0">
+                <button onclick="switchTab('control')" id="tabBtnControl" class="flex-1 py-2 text-xs font-bold rounded-md bg-slate-800 text-sky-400 border border-slate-700/80 flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Control Cota</span>
+                </button>
+                <button onclick="switchTab('pois')" id="tabBtnPois" class="flex-1 py-2 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <span>Puntos (<span id="poisCountBadge">10</span>)</span>
+                </button>
+                <button onclick="switchTab('protocol')" id="tabBtnProtocol" class="flex-1 py-2 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-shield-cat"></i>
+                    <span>Protocolo</span>
+                </button>
+            </div>
+
+            <!-- TAB CONTENT CONTAINER -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+
+                <!-- TAB 1: CONTROL MASTER DE COTA DEL RÍO -->
+                <div id="tabContentControl" class="space-y-4">
+
+                    <!-- Big Readout Card -->
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 shadow-inner flex flex-col items-center justify-center text-center relative overflow-hidden">
+                        <div class="absolute -right-6 -bottom-6 text-slate-900/40 text-9xl font-black pointer-events-none select-none">m</div>
+                        
+                        <span class="text-xs font-mono font-semibold uppercase tracking-widest text-slate-400 mb-1">
+                            NIVEL DE COTA EN PUERTO SAN PEDRO
+                        </span>
+                        
+                        <div class="flex items-baseline gap-2">
+                            <span id="bigWaterDisplay" class="font-mono font-black text-5xl sm:text-6xl text-sky-400 tracking-tight transition-colors">
+                                1.50
+                            </span>
+                            <span class="font-mono font-bold text-2xl text-slate-400">m</span>
+                        </div>
+
+                        <div class="mt-2 text-xs font-mono text-slate-400 flex items-center gap-3 bg-slate-900/80 px-3 py-1 rounded-full border border-slate-800">
+                            <span>Dif. Cero Escala: <strong id="deltaZeroDisplay" class="text-sky-300">+1.50 m</strong></span>
+                            <span>•</span>
+                            <span>Superficie Costera Afectada: <strong id="surfaceAfectedDisplay" class="text-amber-400">12%</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Slider & Controls -->
+                    <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label for="waterSlider" class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                                <i class="fa-solid fa-water-rising text-sky-400"></i>
+                                Deslizador de Cota
+                            </label>
+
+                            <!-- Fine Tuning Controls -->
+                            <div class="flex items-center gap-1">
+                                <button onclick="adjustSlider(-0.1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold transition active:scale-95" title="Bajar 0.1m">-0.1</button>
+                                <button onclick="adjustSlider(0.1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold transition active:scale-95" title="Subir 0.1m">+0.1</button>
+                                <button onclick="toggleSimulation()" id="btnSimulate" class="px-2.5 py-1 rounded bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 text-xs font-bold flex items-center gap-1 transition ml-1" title="Simular Crecida Automática">
+                                    <i id="simIcon" class="fa-solid fa-play text-[10px]"></i>
+                                    <span id="simText">Simular</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Main Range Input -->
+                        <div class="space-y-1">
+                            <input type="range" id="waterSlider" min="1.00" max="6.00" step="0.05" value="1.50" 
+                                   class="w-full h-3 bg-slate-950 rounded-lg appearance-none cursor-pointer border border-slate-800">
+                            
+                            <div class="flex justify-between text-[10px] font-mono text-slate-500 px-1">
+                                <span>1.00m (Estiaje)</span>
+                                <span>3.40m (Alerta)</span>
+                                <span>3.60m (Evacuación)</span>
+                                <span>6.00m (Extremo)</span>
+                            </div>
+                        </div>
+
+                        <!-- Presets de Cota Claves -->
+                        <div class="pt-2">
+                            <span class="text-[11px] font-semibold text-slate-400 block mb-2">Escenarios Rápidos de Referencia:</span>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                <button onclick="setPresetLevel(1.50)" class="px-2 py-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium text-left transition flex flex-col">
+                                    <span class="text-emerald-400 font-bold">1.50 m</span>
+                                    <span class="text-[9px] text-slate-400">Normal / Estiaje</span>
+                                </button>
+
+                                <button onclick="setPresetLevel(3.40)" class="px-2 py-1.5 rounded bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-[11px] text-amber-200 font-medium text-left transition flex flex-col">
+                                    <span class="text-amber-400 font-bold">3.40 m</span>
+                                    <span class="text-[9px] text-amber-300/80">⚠️ Alerta Prefectura</span>
+                                </button>
+
+                                <button onclick="setPresetLevel(3.60)" class="px-2 py-1.5 rounded bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-[11px] text-rose-200 font-medium text-left transition flex flex-col">
+                                    <span class="text-rose-400 font-bold">3.60 m</span>
+                                    <span class="text-[9px] text-rose-300/80">🚨 Evacuación</span>
+                                </button>
+
+                                <button onclick="setPresetLevel(4.80)" class="px-2 py-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium text-left transition flex flex-col">
+                                    <span class="text-sky-400 font-bold">4.80 m</span>
+                                    <span class="text-[9px] text-slate-400">Crecida Histórica '98</span>
+                                </button>
+
+                                <button onclick="setPresetLevel(5.50)" class="px-2 py-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium text-left transition flex flex-col">
+                                    <span class="text-red-400 font-bold">5.50 m</span>
+                                    <span class="text-[9px] text-slate-400">Crecida Extrema</span>
+                                </button>
+
+                                <button onclick="setPresetLevel(2.20)" class="px-2 py-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 font-medium text-left transition flex flex-col">
+                                    <span class="text-teal-400 font-bold">2.20 m</span>
+                                    <span class="text-[9px] text-slate-400">Anegación Costanera</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Impact Summary Cards -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-400 font-semibold uppercase block">Puntos Inundados</span>
+                            <div class="flex items-baseline gap-1.5 mt-1">
+                                <span id="statInundated" class="font-mono font-bold text-2xl text-rose-500">0</span>
+                                <span class="text-xs text-slate-500">/ 10</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-400 font-semibold uppercase block">Puntos en Riesgo</span>
+                            <div class="flex items-baseline gap-1.5 mt-1">
+                                <span id="statAtRisk" class="font-mono font-bold text-2xl text-amber-400">0</span>
+                                <span class="text-xs text-slate-500">/ 10</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Directiva de Navegación Corta -->
+                    <div id="navDirectiveCard" class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex items-start gap-3">
+                        <div id="navDirectiveIcon" class="w-8 h-8 rounded-lg bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="fa-solid fa-ship"></i>
+                        </div>
+                        <div>
+                            <h4 id="navDirectiveTitle" class="text-xs font-bold text-slate-200 uppercase">Navegación Comercial &amp; Recreativa Habilitada</h4>
+                            <p id="navDirectiveBody" class="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                                Condiciones normales en el riacho y canal de acceso al Puerto San Pedro. Amarras estables.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: PUNTOS TÁCTICOS Y ESTADO DE INFRAESTRUCTURA -->
+                <div id="tabContentPois" class="hidden space-y-3">
+                    <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                        <span>Infraestructura y Zonas Clave</span>
+                        <span>Cota Crítica Base</span>
+                    </div>
+
+                    <!-- POI List Container -->
+                    <div id="poiListContainer" class="space-y-2">
+                        <!-- Generado por JavaScript -->
+                    </div>
+                </div>
+
+                <!-- TAB 3: PROTOCOLO DE EMERGENCIA Y ACCIONES PREFECTURA/DEFENSA CIVIL -->
+                <div id="tabContentProtocol" class="hidden space-y-4">
+                    
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <h3 class="text-xs font-bold text-slate-200 uppercase flex items-center gap-2">
+                                <i class="fa-solid fa-clipboard-list text-sky-400"></i>
+                                Protocolo Activo de Actuación
+                            </h3>
+                            <span id="protocolLevelTag" class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                ESTADO NORMAL
+                            </span>
+                        </div>
+
+                        <ul id="protocolStepsList" class="space-y-2 text-xs text-slate-300">
+                            <!-- Generado dinámicamente -->
+                        </ul>
+                    </div>
+
+                    <!-- Módulo de Contactos de Emergencia -->
+                    <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                        <span class="text-[11px] font-bold text-slate-300 uppercase block">Contactos de Guardia Táctica:</span>
+                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                            <a href="tel:106" class="p-2 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 font-mono font-bold flex items-center gap-2 transition">
+                                <i class="fa-solid fa-phone text-xs"></i>
+                                <span>Prefectura: 106</span>
+                            </a>
+                            <a href="tel:103" class="p-2 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-amber-400 font-mono font-bold flex items-center gap-2 transition">
+                                <i class="fa-solid fa-phone text-xs"></i>
+                                <span>Def. Civil: 103</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- FOOTER CON HISTÓRICO Y CRÉDITOS -->
+            <footer class="p-3 bg-slate-950 border-t border-slate-800 text-[10px] text-slate-500 flex items-center justify-between shrink-0">
+                <span>Cero Escala: Puerto San Pedro</span>
+                <span class="font-mono">PWA Offline Client • Esri GIS</span>
+            </footer>
+        </aside>
+    </main>
+
+    <!-- MODAL 1: PARTE DE GUARDIA / INFORME HIDROLÓGICO IMPRIMIBLE -->
+    <div id="modalReport" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[2000] hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <!-- Modal Header -->
+            <div class="bg-slate-950 px-5 py-3.5 border-b border-slate-800 flex items-center justify-between no-print">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-file-invoice text-sky-400"></i>
+                    <h3 class="font-bold text-sm text-slate-200">Parte de Guardia Hidrológico - Prefectura San Pedro</h3>
+                </div>
+                <button onclick="closeReportModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Printable Body Content -->
+            <div class="p-6 overflow-y-auto space-y-4 bg-white text-slate-900 font-sans text-xs leading-relaxed" id="printableReportArea">
+                <!-- Printed Header -->
+                <div class="border-b-2 border-slate-900 pb-3 flex justify-between items-start">
+                    <div>
+                        <h2 class="font-black text-base uppercase tracking-tight">PREFECTURA NAVAL ARGENTINA</h2>
+                        <h3 class="font-bold text-xs text-slate-700 uppercase">DESTACAMENTO SAN PEDRO • PARTE HIDROLÓGICO DE COTAS</h3>
+                        <p class="text-[10px] text-slate-500 mt-0.5">Jurisdicción Río Paraná • Puerto de San Pedro, Buenos Aires</p>
+                    </div>
+                    <div class="text-right font-mono text-[11px]">
+                        <p><strong>FECHA:</strong> <span id="reportDate">--/--/----</span></p>
+                        <p><strong>HORA:</strong> <span id="reportTime">--:--</span> HS</p>
+                    </div>
+                </div>
+
+                <!-- Report Summary Grid -->
+                <div class="grid grid-cols-3 gap-3 bg-slate-100 p-3 rounded border border-slate-300 font-mono text-[11px]">
+                    <div>
+                        <span class="text-slate-500 block text-[9px] uppercase">COTA MEDIDA / SIMULADA</span>
+                        <strong id="reportCotaVal" class="text-sm text-blue-900">3.40 m</strong>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[9px] uppercase">ESTADO DE ALERTA</span>
+                        <strong id="reportStatusVal" class="text-sm text-amber-700">ALERTA PREFECTURA</strong>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[9px] uppercase">INFRAESTRUCTURA AFECTADA</span>
+                        <strong id="reportAfectedVal" class="text-sm text-rose-700">2 Inundados / 3 Riesgo</strong>
+                    </div>
+                </div>
+
+                <!-- Affected Points Table -->
+                <div>
+                    <h4 class="font-bold text-xs uppercase border-b border-slate-300 pb-1 mb-2">Estado Táctico de Puntos de Interés:</h4>
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead>
+                            <tr class="bg-slate-200 border-b border-slate-400 font-bold">
+                                <th class="p-1">Punto / Ubicación</th>
+                                <th class="p-1">Cota Base</th>
+                                <th class="p-1">Estado Actual</th>
+                                <th class="p-1">Nivel Agua / Margen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportTableBody" class="divide-y divide-slate-200">
+                            <!-- JS Inject -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Active Directives -->
+                <div class="space-y-1">
+                    <h4 class="font-bold text-xs uppercase border-b border-slate-300 pb-1">Directivas de Seguridad Operativa:</h4>
+                    <ul id="reportDirectivesList" class="list-disc list-inside space-y-1 text-slate-700">
+                        <!-- JS Inject -->
+                    </ul>
+                </div>
+
+                <!-- Signoff Footer -->
+                <div class="pt-8 flex justify-between items-end text-[10px] text-slate-500 border-t border-slate-300">
+                    <div>
+                        <p>Generado vía Simulador Hidrológico Costero San Pedro (PWA)</p>
+                        <p>Sistema Operativo de Respuesta Preventiva de Defensa Civil y PNA</p>
+                    </div>
+                    <div class="text-center border-t border-slate-400 w-48 pt-1">
+                        <p class="font-bold text-slate-800">Firma / Sello de Guardia</p>
+                        <p>Oficial de Turno PNA / DC</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Actions -->
+            <div class="bg-slate-950 px-5 py-3 border-t border-slate-800 flex justify-end gap-2 no-print">
+                <button onclick="copyReportText()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-copy text-sky-400"></i>
+                    <span>Copiar Texto</span>
+                </button>
+                <button onclick="window.print()" class="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-print"></i>
+                    <span>Imprimir / PDF</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: INFORMACIÓN TÉCNICA Y GUÍA DE COTAS -->
+    <div id="modalInfo" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[2000] hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="bg-slate-950 px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="font-bold text-sm text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-sky-400"></i>
+                    <span>Cotas Críticas del Puerto de San Pedro</span>
+                </h3>
+                <button onclick="closeInfoModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed">
+                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    <h4 class="font-bold text-sky-400 mb-1">Cero de la Escala del Puerto San Pedro</h4>
+                    <p class="text-slate-400">
+                        Las cotas expresadas corresponden a la regla mareográfica oficial ubicada en el Puerto de San Pedro (Buenos Aires). Todas las alturas del simulador se calculan relativas a este cero hidrográfico.
+                    </p>
+                </div>
+
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-200">Tabla de Referencias Históricas y Umbrales:</h4>
+                    <ul class="space-y-1.5 text-slate-300">
+                        <li class="flex justify-between border-b border-slate-800 pb-1">
+                            <span>Cota de Estiaje / Normal:</span>
+                            <span class="font-mono text-emerald-400 font-bold">1.50 m</span>
+                        </li>
+                        <li class="flex justify-between border-b border-slate-800 pb-1">
+                            <span>Anegamiento Paseo Público:</span>
+                            <span class="font-mono text-teal-400 font-bold">2.20 m</span>
+                        </li>
+                        <li class="flex justify-between border-b border-slate-800 pb-1">
+                            <span>Nivel de ALERTA Prefectura:</span>
+                            <span class="font-mono text-amber-400 font-bold">3.40 m</span>
+                        </li>
+                        <li class="flex justify-between border-b border-slate-800 pb-1">
+                            <span>Nivel de EVACUACIÓN Prefectura:</span>
+                            <span class="font-mono text-rose-400 font-bold">3.60 m</span>
+                        </li>
+                        <li class="flex justify-between border-b border-slate-800 pb-1">
+                            <span>Crecida Histórica Año 2016:</span>
+                            <span class="font-mono text-sky-400 font-bold">3.95 m</span>
+                        </li>
+                        <li class="flex justify-between border-b border-slate-800 pb-1">
+                            <span>Crecida Histórica Año 1998 (El Niño):</span>
+                            <span class="font-mono text-sky-400 font-bold">4.82 m</span>
+                        </li>
+                        <li class="flex justify-between border-b border-slate-800 pb-1">
+                            <span>Crecida Histórica Máxima 1982:</span>
+                            <span class="font-mono text-purple-400 font-bold">4.68 m</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="p-3 bg-sky-950/40 border border-sky-800/60 rounded-lg text-sky-200">
+                    <p class="font-semibold mb-0.5">Uso Institucional Gratuito:</p>
+                    <p class="text-[11px] text-sky-300/80">
+                        Este software opera 100% de manera local en el navegador del usuario sin requerir servidores externos, pagos ni licencias. Desarrollado como herramienta preventiva táctica para la comunidad de San Pedro.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC & LEAFLET SIMULATION ENGINE -->
+    <script>
+        /* ==========================================================================
+           1. DATA STRUCTURES & DEFINITIONS (SAN PEDRO, BUENOS AIRES)
+           ========================================================================== */
+        
+        // San Pedro Riverfront Center Coordinates
+        const SAN_PEDRO_CENTER = [-33.673, -59.658];
+        const DEFAULT_ZOOM = 14;
+
+        // Active State Variable
+        let currentWaterLevel = 1.50;
+        let isSimulating = false;
+        let simTimer = null;
+        let deferredPrompt = null;
+
+        // 9 Coastal Zones with Prompt Base Elevations & Coordinates
+        const ZONES_DATA = [
+            {
+                id: 'zone_insular',
+                name: '1. Zona Insular e Islas del Delta',
+                baseElevation: 1.50,
+                color: '#38bdf8',
+                coords: [
+                    [-33.655, -59.650],
+                    [-33.648, -59.632],
+                    [-33.662, -59.625],
+                    [-33.675, -59.642],
+                    [-33.666, -59.652]
+                ]
+            },
+            {
+                id: 'zone_guarderia',
+                name: '2. Guardería Náutica y Bajada de Chaves',
+                baseElevation: 2.00,
+                color: '#22d3ee',
+                coords: [
+                    [-33.681, -59.667],
+                    [-33.678, -59.663],
+                    [-33.682, -59.660],
+                    [-33.685, -59.665]
+                ]
+            },
+            {
+                id: 'zone_costanera_baja',
+                name: '3. Paseo Público y Costanera Baja',
+                baseElevation: 2.20,
+                color: '#2dd4bf',
+                coords: [
+                    [-33.677, -59.664],
+                    [-33.672, -59.661],
+                    [-33.673, -59.658],
+                    [-33.678, -59.661]
+                ]
+            },
+            {
+                id: 'zone_pescadores',
+                name: '4. Club de Pescadores y Camping',
+                baseElevation: 2.30,
+                color: '#a855f7',
+                coords: [
+                    [-33.668, -59.658],
+                    [-33.664, -59.656],
+                    [-33.666, -59.653],
+                    [-33.670, -59.656]
+                ]
+            },
+            {
+                id: 'zone_nautico_amarras',
+                name: '5. Club Náutico San Pedro - Amarraderos y Rampas',
+                baseElevation: 2.40,
+                color: '#3b82f6',
+                coords: [
+                    [-33.671, -59.659],
+                    [-33.668, -59.658],
+                    [-33.669, -59.655],
+                    [-33.672, -59.657]
+                ]
+            },
+            {
+                id: 'zone_nautico_piletas',
+                name: '6. Club Náutico San Pedro - Piletas y Canchas',
+                baseElevation: 3.00,
+                color: '#6366f1',
+                coords: [
+                    [-33.672, -59.660],
+                    [-33.669, -59.658],
+                    [-33.670, -59.656],
+                    [-33.673, -59.658]
+                ]
+            },
+            {
+                id: 'zone_puerto_darsena',
+                name: '7. Dársena y Muelle del Puerto San Pedro',
+                baseElevation: 3.20,
+                color: '#f59e0b',
+                coords: [
+                    [-33.674, -59.656],
+                    [-33.671, -59.653],
+                    [-33.673, -59.649],
+                    [-33.676, -59.652]
+                ]
+            },
+            {
+                id: 'zone_espana_alto',
+                name: '8. Av. España y Acceso Costero Alto',
+                baseElevation: 4.20,
+                color: '#ec4899',
+                coords: [
+                    [-33.678, -59.665],
+                    [-33.674, -59.662],
+                    [-33.676, -59.659],
+                    [-33.680, -59.662]
+                ]
+            },
+            {
+                id: 'zone_prefectura_barda',
+                name: '9. Prefectura San Pedro y Edificios de Control',
+                baseElevation: 4.80,
+                color: '#10b981',
+                coords: [
+                    [-33.672, -59.661],
+                    [-33.670, -59.660],
+                    [-33.671, -59.658],
+                    [-33.673, -59.659]
+                ]
+            }
+        ];
+
+        // 10 Tactical POIs (Marcadores)
+        const POIS_DATA = [
+            {
+                id: 'poi_pna',
+                name: 'Prefectura San Pedro (Destacamento Principal)',
+                category: 'Oficial / Control',
+                baseElevation: 4.80,
+                coords: [-33.6712, -59.6602],
+                icon: 'fa-shield-halved'
+            },
+            {
+                id: 'poi_puerto',
+                name: 'Puerto San Pedro - Consorcio de Gestión',
+                category: 'Comercial / Portuario',
+                baseElevation: 3.20,
+                coords: [-33.6738, -59.6535],
+                icon: 'fa-ship'
+            },
+            {
+                id: 'poi_nautico',
+                name: 'Club Náutico San Pedro (Dársena Central)',
+                category: 'Recreativo / Deportivo',
+                baseElevation: 2.40,
+                coords: [-33.6705, -59.6572],
+                icon: 'fa-anchor'
+            },
+            {
+                id: 'poi_pescadores',
+                name: 'Club de Pescadores de San Pedro',
+                category: 'Recreativo / Camping',
+                baseElevation: 2.30,
+                coords: [-33.6668, -59.6558],
+                icon: 'fa-fish'
+            },
+            {
+                id: 'poi_costanera',
+                name: 'Paseo Público Municipal / Costanera Baja',
+                category: 'Público / Peatonal',
+                baseElevation: 2.20,
+                coords: [-33.6751, -59.6612],
+                icon: 'fa-tree'
+            },
+            {
+                id: 'poi_guarderia',
+                name: 'Guardería Náutica / Bajada de Chaves',
+                category: 'Embarcaciones Menores',
+                baseElevation: 2.00,
+                coords: [-33.6802, -59.6641],
+                icon: 'fa-warehouse'
+            },
+            {
+                id: 'poi_bombeo',
+                name: 'Estación de Bombeo y Achique Costero',
+                category: 'Infraestructura Crítica',
+                baseElevation: 2.10,
+                coords: [-33.6768, -59.6625],
+                icon: 'fa-faucet-drip'
+            },
+            {
+                id: 'poi_socorro',
+                name: 'Puesto Sanitario y Evacuación (Defensa Civil)',
+                category: 'Emergencia / Salud',
+                baseElevation: 4.50,
+                coords: [-33.6725, -59.6631],
+                icon: 'fa-kit-medical'
+            },
+            {
+                id: 'poi_islera',
+                name: 'Comunidad Islera Delta - Riacho San Pedro',
+                category: 'Población Insular',
+                baseElevation: 1.50,
+                coords: [-33.6620, -59.6420],
+                icon: 'fa-house-water'
+            },
+            {
+                id: 'poi_agua',
+                name: 'Toma de Agua Potable Municipal',
+                category: 'Servicio Público',
+                baseElevation: 2.80,
+                coords: [-33.6745, -59.6580],
+                icon: 'fa-droplet'
+            }
+        ];
+
+        /* ==========================================================================
+           2. LEAFLET MAP INITIALIZATION & ESRI ARCGIS TILE LAYERS (NO API KEY REQUIRED)
+           ========================================================================== */
+        
+        const map = L.map('map', {
+            center: SAN_PEDRO_CENTER,
+            zoom: DEFAULT_ZOOM,
+            zoomControl: false,
+            attributionControl: false
+        });
+
+        // ESRI ArcGIS Tile Layers (Free, Open, No API Keys, No Watermarks)
+        const tileLayers = {
+            osm: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { 
+                maxZoom: 19,
+                attribution: 'Tiles &copy; Esri'
+            }),
+            sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+                maxZoom: 18,
+                attribution: 'Tiles &copy; Esri'
+            }),
+            dark: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { 
+                maxZoom: 16,
+                attribution: 'Tiles &copy; Esri'
+            })
+        };
+
+        // Set default tile layer
+        tileLayers.osm.addTo(map);
+
+        // Map Zoom Controls in top right
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Store Leaflet layer references
+        const leafletZones = {};
+        const leafletPOIs = {};
+
+        /* ==========================================================================
+           3. RENDER MAP POLYGONS & MARKERS
+           ========================================================================== */
+
+        // Render Inundation Polygons
+        ZONES_DATA.forEach(zone => {
+            const polygon = L.polygon(zone.coords, {
+                color: zone.color,
+                weight: 1.5,
+                dashArray: '4,4',
+                fillColor: zone.color,
+                fillOpacity: 0.1,
+                className: 'water-flooded-polygon'
+            }).addTo(map);
+
+            polygon.bindTooltip(`<strong>${zone.name}</strong><br>Cota Base: ${zone.baseElevation.toFixed(2)}m`, {
+                sticky: true,
+                className: 'bg-slate-900 border-slate-700 text-slate-100 text-xs shadow-xl'
+            });
+
+            leafletZones[zone.id] = polygon;
+        });
+
+        // Render Tactical POI Markers
+        POIS_DATA.forEach(poi => {
+            const customIcon = L.divIcon({
+                className: 'custom-poi-marker',
+                html: `
+                    <div id="poi_icon_${poi.id}" class="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shadow-lg marker-pulse-green border-2 border-slate-900 transition-all">
+                        <i class="fa-solid ${poi.icon} text-xs"></i>
+                    </div>
+                `,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+
+            const marker = L.marker(poi.coords, { icon: customIcon }).addTo(map);
+            
+            // Popup Info
+            marker.bindPopup(() => createPoiPopupContent(poi, currentWaterLevel), {
+                className: 'custom-leaflet-popup'
+            });
+
+            leafletPOIs[poi.id] = marker;
+        });
+
+        /* ==========================================================================
+           4. CORE SIMULATION ENGINE & UPDATE FUNCTIONS
+           ========================================================================== */
+
+        function updateSimulation(val) {
+            currentWaterLevel = parseFloat(val);
+
+            // 1. Update UI Text Displays
+            document.getElementById('mapLevelDisplay').innerText = `${currentWaterLevel.toFixed(2)} m`;
+            document.getElementById('bigWaterDisplay').innerText = currentWaterLevel.toFixed(2);
+            document.getElementById('waterSlider').value = currentWaterLevel;
+            document.getElementById('deltaZeroDisplay').innerText = `+${currentWaterLevel.toFixed(2)} m`;
+
+            // 2. Determine Overall Alert State
+            let statusText = 'NORMAL / ESTIAJE';
+            let statusBadgeClass = 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80';
+            let bigTextColor = 'text-sky-400';
+
+            if (currentWaterLevel >= 3.60) {
+                statusText = '🚨 NIVELES DE EVACUACIÓN';
+                statusBadgeClass = 'bg-rose-950/80 text-rose-400 border-rose-800/80 animate-pulse';
+                bigTextColor = 'text-rose-500';
+            } else if (currentWaterLevel >= 3.40) {
+                statusText = '⚠️ ALERTA PREFECTURA';
+                statusBadgeClass = 'bg-amber-950/80 text-amber-400 border-amber-800/80';
+                bigTextColor = 'text-amber-400';
+            } else if (currentWaterLevel >= 2.20) {
+                statusText = 'PRE-ALERTA ANEGACION';
+                statusBadgeClass = 'bg-sky-950/80 text-sky-300 border-sky-800/80';
+                bigTextColor = 'text-teal-400';
+            }
+
+            const badgeElem = document.getElementById('statusBadge');
+            badgeElem.className = `px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border shadow-sm transition-all ${statusBadgeClass}`;
+            document.getElementById('statusBadgeText').innerText = statusText;
+            document.getElementById('bigWaterDisplay').className = `font-mono font-black text-5xl sm:text-6xl tracking-tight transition-colors ${bigTextColor}`;
+
+            // 3. Update Inundation Polygons Visuals
+            let floodedZoneCount = 0;
+            ZONES_DATA.forEach(zone => {
+                const poly = leafletZones[zone.id];
+                const depth = currentWaterLevel - zone.baseElevation;
+
+                if (depth >= 0) {
+                    floodedZoneCount++;
+                    // Flooded state
+                    let fillOp = Math.min(0.35 + (depth * 0.15), 0.85);
+                    let strokeCol = '#ef4444';
+                    let fillCol = '#dc2626';
+
+                    if (depth < 0.3) {
+                        fillCol = '#f59e0b';
+                        strokeCol = '#f59e0b';
+                    }
+
+                    poly.setStyle({
+                        fillColor: fillCol,
+                        fillOpacity: fillOp,
+                        color: strokeCol,
+                        weight: 2.5,
+                        dashArray: null
+                    });
+                } else {
+                    // Dry / Normal state
+                    poly.setStyle({
+                        fillColor: zone.color,
+                        fillOpacity: 0.08,
+                        color: zone.color,
+                        weight: 1.5,
+                        dashArray: '4,4'
+                    });
+                }
+            });
+
+            // Calculate estimated coastal surface flooded %
+            const surfacePercent = Math.min(Math.round((floodedZoneCount / ZONES_DATA.length) * 100), 100);
+            document.getElementById('surfaceAfectedDisplay').innerText = `${surfacePercent}%`;
+
+            // 4. Update POI Markers & Calculate Stats
+            let inundatedCount = 0;
+            let atRiskCount = 0;
+
+            POIS_DATA.forEach(poi => {
+                const markerElem = document.getElementById(`poi_icon_${poi.id}`);
+                const depth = currentWaterLevel - poi.baseElevation;
+
+                if (markerElem) {
+                    if (depth >= 0) {
+                        inundatedCount++;
+                        markerElem.className = 'w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center font-bold shadow-lg marker-pulse-red border-2 border-slate-900 transition-all';
+                    } else if (depth >= -0.30) {
+                        atRiskCount++;
+                        markerElem.className = 'w-8 h-8 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-lg marker-pulse-yellow border-2 border-slate-900 transition-all';
+                    } else {
+                        markerElem.className = 'w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shadow-lg marker-pulse-green border-2 border-slate-900 transition-all';
+                    }
+                }
+            });
+
+            document.getElementById('statInundated').innerText = inundatedCount;
+            document.getElementById('statAtRisk').innerText = atRiskCount;
+
+            // 5. Update POIs List View Tab
+            renderPoiListTab();
+
+            // 6. Update Navigation Directives & Protocol Checklist
+            updateDirectivesAndProtocol();
+        }
+
+        /* ==========================================================================
+           5. POI POPUP GENERATOR & TAB LIST RENDER
+           ========================================================================== */
+
+        function createPoiPopupContent(poi, level) {
+            const depth = level - poi.baseElevation;
+            let statusBadge = '<span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">OPERATIVO / SECO</span>';
+            let depthText = `<span class="text-emerald-400 font-mono">Margen Libre: ${Math.abs(depth).toFixed(2)}m</span>`;
+
+            if (depth >= 0) {
+                statusBadge = '<span class="bg-rose-950 text-rose-400 border border-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">INUNDADO / INOPERATIVO</span>';
+                depthText = `<span class="text-rose-400 font-mono font-bold">Agua sobre nivel: +${depth.toFixed(2)}m</span>`;
+            } else if (depth >= -0.30) {
+                statusBadge = '<span class="bg-amber-950 text-amber-400 border border-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">ANEGAMIENTO INMINENTE</span>';
+                depthText = `<span class="text-amber-400 font-mono font-bold">Margen crítico: ${Math.abs(depth).toFixed(2)}m</span>`;
+            }
+
+            return `
+                <div class="p-2 space-y-2 text-slate-100 font-sans max-w-[220px]">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-1">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase">${poi.category}</span>
+                        ${statusBadge}
+                    </div>
+                    <h4 class="font-bold text-xs leading-snug">${poi.name}</h4>
+                    <div class="bg-slate-950 p-2 rounded border border-slate-800 text-[11px] space-y-1">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Cota Base:</span>
+                            <span class="font-mono text-slate-200 font-bold">${poi.baseElevation.toFixed(2)}m</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Estado Cota:</span>
+                            ${depthText}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPoiListTab() {
+            const container = document.getElementById('poiListContainer');
+            container.innerHTML = '';
+
+            POIS_DATA.forEach(poi => {
+                const depth = currentWaterLevel - poi.baseElevation;
+                let badgeClass = 'bg-emerald-950 text-emerald-400 border-emerald-800';
+                let statusLabel = 'Operativo';
+                let depthText = `Margen: ${Math.abs(depth).toFixed(2)}m`;
+
+                if (depth >= 0) {
+                    badgeClass = 'bg-rose-950 text-rose-400 border-rose-800 animate-pulse';
+                    statusLabel = 'Inundado';
+                    depthText = `Agua: +${depth.toFixed(2)}m`;
+                } else if (depth >= -0.30) {
+                    badgeClass = 'bg-amber-950 text-amber-400 border-amber-800';
+                    statusLabel = 'En Riesgo';
+                    depthText = `Libre: ${Math.abs(depth).toFixed(2)}m`;
+                }
+
+                const card = document.createElement('div');
+                card.className = 'bg-slate-950 p-3 rounded-xl border border-slate-800 hover:border-slate-700 transition cursor-pointer flex items-center justify-between gap-2';
+                card.onclick = () => {
+                    map.flyTo(poi.coords, 16, { duration: 1.2 });
+                    leafletPOIs[poi.id].openPopup();
+                };
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 text-xs shrink-0">
+                            <i class="fa-solid ${poi.icon}"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-200 leading-tight">${poi.name}</h4>
+                            <span class="text-[10px] text-slate-400 block mt-0.5">Cota Base: ${poi.baseElevation.toFixed(2)}m • ${poi.category}</span>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">${statusLabel}</span>
+                        <span class="text-[10px] font-mono text-slate-400 block mt-1">${depthText}</span>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        /* ==========================================================================
+           6. DIRECTIVES & PROTOCOL MATRIX LOGIC
+           ========================================================================== */
+
+        function updateDirectivesAndProtocol() {
+            const iconElem = document.getElementById('navDirectiveIcon');
+            const titleElem = document.getElementById('navDirectiveTitle');
+            const bodyElem = document.getElementById('navDirectiveBody');
+            const stepsList = document.getElementById('protocolStepsList');
+            const levelTag = document.getElementById('protocolLevelTag');
+
+            stepsList.innerHTML = '';
+
+            let steps = [];
+
+            if (currentWaterLevel < 2.20) {
+                // NORMAL
+                iconElem.className = 'w-8 h-8 rounded-lg bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center shrink-0 mt-0.5';
+                iconElem.innerHTML = '<i class="fa-solid fa-ship"></i>';
+                titleElem.innerText = 'Navegación & Puerto Operativos';
+                bodyElem.innerText = 'Sin restricciones en el riacho ni amarraderos. Actividad normal en bajadas públicas.';
+                levelTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800';
+                levelTag.innerText = 'ESTADO NORMAL';
+
+                steps = [
+                    'Monitoreo rutinario de escala mareográfica del Puerto San Pedro.',
+                    'Patrullaje preventivo de guardacostas en canal de acceso.',
+                    'Verificación de amarras en Club Náutico y Guardería Náutica.'
+                ];
+            } else if (currentWaterLevel < 3.40) {
+                // PRE-ALERTA
+                iconElem.className = 'w-8 h-8 rounded-lg bg-sky-950 text-sky-400 border border-sky-800 flex items-center justify-center shrink-0 mt-0.5';
+                iconElem.innerHTML = '<i class="fa-solid fa-water-rising"></i>';
+                titleElem.innerText = 'Pre-Alerta por Anegamiento de Costanera';
+                bodyElem.innerText = 'Agua ingresando a sectores de Paseo Público y bajadas bajas. Precaución para deportistas y amarraderos.';
+                levelTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800';
+                levelTag.innerText = 'PRE-ALERTA ANEGACIÓN';
+
+                steps = [
+                    'Aviso preventivo a embarcaciones menores en la zona del riacho.',
+                    'Inspección de bombas de achique en estación costera.',
+                    'Corte preventivo de luminarias en la franja baja del Paseo Público.',
+                    'Alerta a habitantes isleños por anegamiento de muelles de madera.'
+                ];
+            } else if (currentWaterLevel < 3.60) {
+                // ALERTA PREFECTURA (3.40m)
+                iconElem.className = 'w-8 h-8 rounded-lg bg-amber-950 text-amber-400 border border-amber-800 flex items-center justify-center shrink-0 mt-0.5';
+                iconElem.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+                titleElem.innerText = 'Nivel de ALERTA OFICIAL (3.40m)';
+                bodyElem.innerText = 'Restricción de navegación comercial y deportiva a velocidad reducida. Alerta operativa a Defensa Civil.';
+                levelTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800';
+                levelTag.innerText = 'ALERTA PREFECTURA';
+
+                steps = [
+                    'Emitir Radioaviso Náutico con velocidad mínima de gobierno para evitar oleaje.',
+                    'Cierre vehicular del acceso a la Costanera Baja por parte de Inspectores/DC.',
+                    'Suspensión preventiva de actividades recreativas en piletas y playa del Club Náutico.',
+                    'Guardia permanente de Prefectura en zona de embarcaderos y Club de Pescadores.'
+                ];
+            } else {
+                // EVACUACIÓN / EMERGENCIA (>=3.60m)
+                iconElem.className = 'w-8 h-8 rounded-lg bg-rose-950 text-rose-400 border border-rose-800 flex items-center justify-center shrink-0 mt-0.5 animate-pulse';
+                iconElem.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+                titleElem.innerText = 'Nivel de EVACUACIÓN Y EMERGENCIA (>=3.60m)';
+                bodyElem.innerText = 'Evacuación de sectores bajos insulares y camping. Cierre total de accesos costeros e intervención de Defensa Civil.';
+                levelTag.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-800 animate-pulse';
+                levelTag.innerText = 'EVACUACIÓN Y EMERGENCIA';
+
+                steps = [
+                    'Despliegue de embarcaciones de salvamento para evacuación isleña y camping.',
+                    'Habilitación de Centro de Evacuados por parte de la Municipalidad de San Pedro.',
+                    'Corte del servicio eléctrico en todo el perímetro costero bajo inundado.',
+                    'Suspensión total de maniobras en dársena comercial del Puerto de San Pedro.',
+                    'Guardia de contingencia 24hs en Destacamento Prefectura y Bomberos Voluntarios.'
+                ];
+            }
+
+            steps.forEach((step, idx) => {
+                const li = document.createElement('li');
+                li.className = 'flex items-start gap-2 bg-slate-900 p-2 rounded border border-slate-800/80';
+                li.innerHTML = `
+                    <span class="w-4 h-4 rounded-full bg-sky-950 border border-sky-800 text-sky-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">${idx + 1}</span>
+                    <span>${step}</span>
+                `;
+                stepsList.appendChild(li);
+            });
+        }
+
+        /* ==========================================================================
+           7. INTERACTION CONTROLS & EVENT HANDLERS
+           ========================================================================== */
+
+        // Slider Event
+        document.getElementById('waterSlider').addEventListener('input', (e) => {
+            if (isSimulating) stopSimulation();
+            updateSimulation(e.target.value);
+        });
+
+        function adjustSlider(delta) {
+            if (isSimulating) stopSimulation();
+            let newVal = Math.min(Math.max(currentWaterLevel + delta, 1.00), 6.00);
+            updateSimulation(newVal);
+        }
+
+        function setPresetLevel(val) {
+            if (isSimulating) stopSimulation();
+            updateSimulation(val);
+        }
+
+        // Automatic Tide Simulation Toggle
+        function toggleSimulation() {
+            if (isSimulating) {
+                stopSimulation();
+            } else {
+                startSimulation();
+            }
+        }
+
+        function startSimulation() {
+            isSimulating = true;
+            document.getElementById('simIcon').className = 'fa-solid fa-pause text-[10px]';
+            document.getElementById('simText').innerText = 'Pausar';
+            document.getElementById('btnSimulate').className = 'px-2.5 py-1 rounded bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs font-bold flex items-center gap-1 transition ml-1 animate-pulse';
+
+            let direction = 0.05;
+            simTimer = setInterval(() => {
+                let nextVal = currentWaterLevel + direction;
+                if (nextVal >= 5.80) direction = -0.05;
+                if (nextVal <= 1.20) direction = 0.05;
+                updateSimulation(nextVal.toFixed(2));
+            }, 300);
+        }
+
+        function stopSimulation() {
+            isSimulating = false;
+            if (simTimer) clearInterval(simTimer);
+            document.getElementById('simIcon').className = 'fa-solid fa-play text-[10px]';
+            document.getElementById('simText').innerText = 'Simular';
+            document.getElementById('btnSimulate').className = 'px-2.5 py-1 rounded bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 text-xs font-bold flex items-center gap-1 transition ml-1';
+        }
+
+        // Base Layer Switcher
+        function switchBaseLayer(key) {
+            Object.values(tileLayers).forEach(layer => map.removeLayer(layer));
+            tileLayers[key].addTo(map);
+
+            ['btnOsm', 'btnSat', 'btnDark'].forEach(b => {
+                document.getElementById(b).className = 'px-2.5 py-1 rounded text-xs font-semibold text-slate-300 hover:bg-slate-800 transition';
+            });
+
+            if (key === 'osm') document.getElementById('btnOsm').className = 'px-2.5 py-1 rounded text-xs font-semibold bg-sky-600 text-white transition';
+            if (key === 'sat') document.getElementById('btnSat').className = 'px-2.5 py-1 rounded text-xs font-semibold bg-sky-600 text-white transition';
+            if (key === 'dark') document.getElementById('btnDark').className = 'px-2.5 py-1 rounded text-xs font-semibold bg-sky-600 text-white transition';
+        }
+
+        // Sidebar Tab Switcher
+        function switchTab(tabKey) {
+            ['Control', 'Pois', 'Protocol'].forEach(t => {
+                document.getElementById(`tabContent${t}`).classList.add('hidden');
+                document.getElementById(`tabBtn${t}`).className = 'flex-1 py-2 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition';
+            });
+
+            if (tabKey === 'control') {
+                document.getElementById('tabContentControl').classList.remove('hidden');
+                document.getElementById('tabBtnControl').className = 'flex-1 py-2 text-xs font-bold rounded-md bg-slate-800 text-sky-400 border border-slate-700/80 flex items-center justify-center gap-1.5 transition';
+            } else if (tabKey === 'pois') {
+                document.getElementById('tabContentPois').classList.remove('hidden');
+                document.getElementById('tabBtnPois').className = 'flex-1 py-2 text-xs font-bold rounded-md bg-slate-800 text-sky-400 border border-slate-700/80 flex items-center justify-center gap-1.5 transition';
+            } else if (tabKey === 'protocol') {
+                document.getElementById('tabContentProtocol').classList.remove('hidden');
+                document.getElementById('tabBtnProtocol').className = 'flex-1 py-2 text-xs font-bold rounded-md bg-slate-800 text-sky-400 border border-slate-700/80 flex items-center justify-center gap-1.5 transition';
+            }
+        }
+
+        /* ==========================================================================
+           8. REPORT GENERATOR & MODAL DIALOGS
+           ========================================================================== */
+
+        function openReportModal() {
+            const now = new Date();
+            document.getElementById('reportDate').innerText = now.toLocaleDateString('es-AR');
+            document.getElementById('reportTime').innerText = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+            document.getElementById('reportCotaVal').innerText = `${currentWaterLevel.toFixed(2)} m`;
+            
+            let statusText = 'NORMAL';
+            if (currentWaterLevel >= 3.60) statusText = 'EVACUACIÓN Y EMERGENCIA';
+            else if (currentWaterLevel >= 3.40) statusText = 'ALERTA PREFECTURA';
+            else if (currentWaterLevel >= 2.20) statusText = 'PRE-ALERTA ANEGACIÓN';
+            document.getElementById('reportStatusVal').innerText = statusText;
+
+            let inCount = 0;
+            let riskCount = 0;
+            const tableBody = document.getElementById('reportTableBody');
+            tableBody.innerHTML = '';
+
+            POIS_DATA.forEach(poi => {
+                const depth = currentWaterLevel - poi.baseElevation;
+                let st = 'Operativo';
+                let stClass = 'text-green-700 font-bold';
+                let depthLabel = `Margen: ${Math.abs(depth).toFixed(2)}m`;
+
+                if (depth >= 0) {
+                    inCount++;
+                    st = 'INUNDADO';
+                    stClass = 'text-red-700 font-bold';
+                    depthLabel = `Agua: +${depth.toFixed(2)}m`;
+                } else if (depth >= -0.30) {
+                    riskCount++;
+                    st = 'En Riesgo';
+                    stClass = 'text-amber-700 font-bold';
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-1 font-semibold">${poi.name}</td>
+                    <td class="p-1 font-mono">${poi.baseElevation.toFixed(2)}m</td>
+                    <td class="p-1 ${stClass}">${st}</td>
+                    <td class="p-1 font-mono">${depthLabel}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            document.getElementById('reportAfectedVal').innerText = `${inCount} Inundados / ${riskCount} Riesgo`;
+
+            // Report Directives
+            const dirList = document.getElementById('reportDirectivesList');
+            dirList.innerHTML = '';
+            const steps = document.querySelectorAll('#protocolStepsList span:last-child');
+            steps.forEach(s => {
+                const li = document.createElement('li');
+                li.innerText = s.innerText;
+                dirList.appendChild(li);
+            });
+
+            document.getElementById('modalReport').classList.remove('hidden');
+        }
+
+        function closeReportModal() {
+            document.getElementById('modalReport').classList.add('hidden');
+        }
+
+        function openInfoModal() {
+            document.getElementById('modalInfo').classList.remove('hidden');
+        }
+
+        function closeInfoModal() {
+            document.getElementById('modalInfo').classList.add('hidden');
+        }
+
+        function copyReportText() {
+            const date = document.getElementById('reportDate').innerText;
+            const time = document.getElementById('reportTime').innerText;
+            const cota = currentWaterLevel.toFixed(2);
+            const status = document.getElementById('reportStatusVal').innerText;
+
+            const text = `*PARTE HIDROLÓGICO PREFECTURA SAN PEDRO*\nFecha: ${date} ${time} hs\nCota Puerto San Pedro: ${cota}m\nEstado: ${status}\nPuntos Afectados: ${document.getElementById('reportAfectedVal').innerText}\nGenerado mediante Simulador Hidrológico Costero.`;
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                const btn = event.currentTarget;
+                btn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i><span>¡Copiado!</span>';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-solid fa-copy text-sky-400"></i><span>Copiar Texto</span>';
+                }, 2000);
+            } catch (err) {
+                console.error('Error al copiar:', err);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        /* ==========================================================================
+           9. PWA SERVICE WORKER & INSTALL PROMPT
+           ========================================================================== */
+
+        // Register Inline Service Worker for Offline PWA execution
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    const CACHE_NAME = 'sanpedro-rio-v3';
+                    self.addEventListener('install', e => {
+                        e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
+                    });
+                    self.addEventListener('fetch', e => {
+                        e.respondWith(caches.match(e.request).then(response => response || fetch(e.request)));
+                    });
+                `;
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(swUrl).catch(err => console.log('SW registration failure:', err));
+            });
+        }
+
+        // PWA Install Event Catching
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('pwaInstallBtn').classList.remove('hidden');
+        });
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        document.getElementById('pwaInstallBtn').classList.add('hidden');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        /* ==========================================================================
+           10. INITIALIZATION
+           ========================================================================== */
+
+        window.onload = function() {
+            // Initial render
+            updateSimulation(1.50);
+            
+            // Adjust Leaflet map size on window resize
+            window.addEventListener('resize', () => {
+                map.invalidateSize();
+            });
+        };
+    </script>
+</body>
+</html>
